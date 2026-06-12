@@ -25,5 +25,9 @@ npm run dev
 ```
 ## 🌐 Live Demo
 👉 [Click here to view live app](https://airline-reservation-system-beta-six.vercel.app)
+
+## 🗄️ Database
+- Firebase Firestore (Real-time Database)
+- Data persists across sessions
 ## 👨‍💻 Developer
 **Mohit** | MCA Student | MIT-WPU Pune
