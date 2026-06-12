@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Import Library XML Data</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<body class="bg-green-100 min-h-screen flex items-center justify-center">
+
+<div class="p-6 max-w-4xl mx-auto bg-green-50 text-gray-800 rounded-2xl shadow-lg border border-green-300">
+  <h2 class="text-3xl font-bold mb-4 text-green-700 text-center">
+    📥 Import Library XML Data
+  </h2>
+
+  <input
+    id="xmlFileInput"
+    type="file"
+    accept=".xml"
+    class="block w-full border border-green-400 bg-white rounded-lg p-2 mb-4"
+  />
+
+  <p id="fileNameDisplay" class="text-sm text-gray-600 mb-3 hidden">
+    Selected File: <strong></strong>
+  </p>
+
+  <div id="recordsContainer" class="hidden mt-4 bg-white p-4 rounded-lg border border-green-300 shadow-sm">
+    <h3 class="text-lg font-semibold mb-3 text-green-600">
+      Parsed Librarian Records
+    </h3>
+    <div id="librariansWrapper"></div>
+  </div>
+
+</div>
+
+<script>
+  function getText(parent, tag) {
+    return parent.getElementsByTagName(tag)[0]?.textContent?.trim() || "N/A";
+  }
+
+  document.getElementById("xmlFileInput").addEventListener("change", async function (e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    document.getElementById("fileNameDisplay").classList.remove("hidden");
+    document.querySelector("#fileNameDisplay strong").textContent = file.name;
+
+    const text = await file.text();
+    const xml = new DOMParser().parseFromString(text, "text/xml");
+
+    const librarianNodes = xml.getElementsByTagName("librarian");
+    const wrapper = document.getElementById("librariansWrapper");
+    wrapper.innerHTML = "";
+
+    if (!librarianNodes.length) {
+      wrapper.innerHTML = `<p class="text-gray-500 italic">No librarians found in XML.</p>`;
+    } else {
+      Array.from(librarianNodes).forEach((node) => {
+        const name = getText(node, "name");
+        const employeeId = getText(node, "employeeId");
+        const branch = getText(node, "branch");
+        const workHours = getText(node, "workHours");
+        const contact = getText(node, "contact");
+
+        // Books section
+        const bookNodes = node.getElementsByTagName("book");
+        let booksHTML = "";
+
+        if (bookNodes.length > 0) {
+          booksHTML = `
+            <div class="mt-2">
+              <p class="font-semibold text-gray-700">📚 Books Managed:</p>
+              <ul>
+                ${Array.from(bookNodes).map(b => `
+                  <li class="ml-4 list-disc">
+                    ${getText(b, "title")} — ${getText(b, "author")} (${getText(b, "copies")} copies)
+                  </li>
+                `).join("")}
+              </ul>
+            </div>
+          `;
+        }
+
+        wrapper.innerHTML += `
+          <div class="border-b border-gray-300 py-3 mb-2">
+            <h4 class="font-semibold text-green-700">${name} (${employeeId})</h4>
+            <p>🏬 Branch: ${branch}</p>
+            <p>⏰ Working Hours: ${workHours}</p>
+            <p>📞 Contact: ${contact}</p>
+            ${booksHTML}
+          </div>
+        `;
+      });
+    }
+
+    document.getElementById("recordsContainer").classList.remove("hidden");
+  });
+</script>
+
+</body>
+</html>

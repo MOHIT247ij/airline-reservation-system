@@ -1,0 +1,11 @@
+{
+  "orgId": "citycare_hospital",
+  "orgName": "CityCare Hospital",
+  "themeColor": "#00796b",
+  "collections": {
+    "doctors": "citycare_doctors",
+    "patients": "citycare_patients",
+    "appointments": "citycare_appointments"
+  },
+  "description": "Hospital demo plementing OODBMS concepts (encapsulation, inheritance, nested objects)."
+}

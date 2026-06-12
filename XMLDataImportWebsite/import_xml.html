@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Import XML — CityCare Hospital</title>
+  <!-- Tailwind CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-50 min-h-screen p-8">
+  <div class="max-w-4xl mx-auto bg-white rounded-2xl shadow p-6">
+    <h1 class="text-2xl font-bold text-blue-700 mb-4">Import XML — CityCare Hospital</h1>
+
+    <div class="mb-4">
+      <label class="block text-sm font-medium mb-2">Upload exported XML file</label>
+      <input id="fileInput" type="file" accept=".xml" class="block w-full text-sm text-gray-700" />
+    </div>
+
+    <div id="fileMeta" class="text-sm text-gray-500 mb-4"></div>
+
+    <div id="parsedArea" class="space-y-4"></div>
+
+    <div id="actions" class="mt-6">
+      <button id="saveBtn" class="hidden bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Save to Backend</button>
+      <button id="clearBtn" class="ml-2 bg-rose-500 text-white px-3 py-2 rounded hover:bg-rose-600 hidden">Clear</button>
+    </div>
+
+    <div id="rawOutput" class="hidden mt-6 p-3 bg-slate-100 rounded text-sm text-slate-800 overflow-auto"></div>
+  </div>
+
+  <script>
+    // Helper: convert XML node -> JS object (handles single vs multiple sibling nodes)
+    function xmlNodeToObject(node) {
+      // No children -> return text content
+      if (!node.children || node.children.length === 0) {
+        return node.textContent || "";
+      }
+      const obj = {};
+      for (const child of node.children) {
+        const childName = child.nodeName;
+        const value = xmlNodeToObject(child);
+        // If key already exists, make/append to array
+        if (obj[childName]) {
+          if (!Array.isArray(obj[childName])) obj[childName] = [obj[childName]];
+          obj[childName].push(value);
+        } else {
+          obj[childName] = value;
+        }
+      }
+      return obj;
+    }
+
+    // Normalize doctor nodes into an array
+    function getDoctorsFromParsed(parsedRoot) {
+      // Expecting structure similar to: { CityCareHospital: { doctorsList: { doctor: [...] } } }
+      const rootKey = Object.keys(parsedRoot)[0];
+      const root = parsedRoot[rootKey] || {};
+      const doctorsList = root.doctorsList || {};
+      let doctors = doctorsList.doctor || [];
+
+      // If single object, wrap into array
+      if (!Array.isArray(doctors)) doctors = [doctors];
+
+      // Ensure valid array
+      return doctors.filter(Boolean);
+    }
+
+    // Render one doctor card (DOM)
+    function renderDoctorCard(doc) {
+      const card = document.createElement('div');
+      card.className = 'p-4 rounded-lg border bg-white shadow-sm';
+
+      const name = doc.name || doc.Name || 'Unknown Doctor';
+      const specialization = doc.specialization || doc.Specialization || 'N/A';
+      const age = doc.age || doc.Age || 'N/A';
+
+      const h = document.createElement('h3');
+      h.className = 'text-lg font-semibold text-blue-700';
+      h.textContent = name;
+      card.appendChild(h);
+
+      const meta = document.createElement('p');
+      meta.className = 'text-sm text-gray-600 mb-2';
+      meta.innerHTML = `🩺 <strong>${specialization}</strong> &nbsp; • &nbsp; 🎂 Age: ${age}`;
+      card.appendChild(meta);
+
+      // Schedule
+      if (doc.schedule) {
+        const schedule = doc.schedule;
+        const days = Array.isArray(schedule.days) ? schedule.days.join(', ') : (schedule.days || '');
+        const shift = schedule.shift || '';
+        const s = document.createElement('p');
+        s.className = 'text-sm text-gray-700';
+        s.innerHTML = `⏰ Shift: <strong>${shift || 'N/A'}</strong> (${days || 'N/A'})`;
+        card.appendChild(s);
+      }
+
+      // Patients list
+      if (doc.patients) {
+        const patients = Array.isArray(doc.patients) ? doc.patients : [doc.patients];
+        if (patients.length > 0) {
+          const pWrap = document.createElement('div');
+          pWrap.className = 'mt-3';
+          const title = document.createElement('p');
+          title.className = 'text-sm font-medium text-gray-700';
+          title.textContent = 'Patients:';
+          pWrap.appendChild(title);
+
+          const ul = document.createElement('ul');
+          ul.className = 'list-disc ml-5 text-sm text-gray-600';
+          patients.forEach(p => {
+            const li = document.createElement('li');
+            const pname = p.name || p.Name || 'Unknown';
+            const pdisease = p.disease || p.Disease || 'N/A';
+            const page = p.age || p.Age || 'N/A';
+            li.textContent = `${pname} (${page}) — ${pdisease}`;
+            ul.appendChild(li);
+          });
+          pWrap.appendChild(ul);
+          card.appendChild(pWrap);
+        }
+      }
+
+      return card;
+    }
+
+    // Parse XML text -> JS object root wrapper
+    function parseXmlText(xmlText) {
+      const parser = new DOMParser();
+      const xmlDoc = parser.parseFromString(xmlText, "application/xml");
+      if (xmlDoc.getElementsByTagName("parsererror").length) {
+        throw new Error("Invalid XML format");
+      }
+
+      // Build JS object
+      const root = xmlDoc.documentElement; // e.g., CityCareHospital
+      const rootObj = {};
+      rootObj[root.nodeName] = xmlNodeToObject(root);
+      return rootObj;
+    }
+
+    // DOM nodes
+    const fileInput = document.getElementById('fileInput');
+    const parsedArea = document.getElementById('parsedArea');
+    const fileMeta = document.getElementById('fileMeta');
+    const saveBtn = document.getElementById('saveBtn');
+    const clearBtn = document.getElementById('clearBtn');
+    const rawOutput = document.getElementById('rawOutput');
+
+    let latestParsed = null;
+
+    fileInput.addEventListener('change', async (ev) => {
+      parsedArea.innerHTML = '';
+      rawOutput.classList.add('hidden');
+      saveBtn.classList.add('hidden');
+      clearBtn.classList.add('hidden');
+      fileMeta.textContent = '';
+
+      const file = ev.target.files && ev.target.files[0];
+      if (!file) return;
+      fileMeta.textContent = `Selected file: ${file.name} (${Math.round(file.size/1024)} KB)`;
+
+      try {
+        const text = await file.text();
+        const parsedRoot = parseXmlText(text); // may throw
+        latestParsed = parsedRoot;
+
+        // Show raw pretty JSON (optional)
+        rawOutput.textContent = JSON.stringify(parsedRoot, null, 2);
+        rawOutput.classList.remove('hidden');
+
+        // Extract doctors
+        const doctors = getDoctorsFromParsed(parsedRoot);
+
+        if (doctors.length === 0) {
+          const msg = document.createElement('p');
+          msg.className = 'text-sm text-rose-600';
+          msg.textContent = 'No doctor records found in this XML.';
+          parsedArea.appendChild(msg);
+        } else {
+          // Render each doctor card
+          doctors.forEach(d => {
+            parsedArea.appendChild(renderDoctorCard(d));
+          });
+
+          // Show Save and Clear buttons
+          saveBtn.classList.remove('hidden');
+          clearBtn.classList.remove('hidden');
+        }
+      } catch (err) {
+        const errMsg = document.createElement('p');
+        errMsg.className = 'text-sm text-rose-600';
+        errMsg.textContent = 'Error parsing XML: ' + err.message;
+        parsedArea.appendChild(errMsg);
+      }
+    });
+
+    // Clear the view
+    clearBtn.addEventListener('click', () => {
+      parsedArea.innerHTML = '';
+      rawOutput.classList.add('hidden');
+      saveBtn.classList.add('hidden');
+      clearBtn.classList.add('hidden');
+      fileMeta.textContent = '';
+      fileInput.value = '';
+      latestParsed = null;
+    });
+
+    // Save parsed data to backend (optional)
+    saveBtn.addEventListener('click', async () => {
+      if (!latestParsed) return;
+      // Example: prepare the doctor array for sending
+      const doctors = getDoctorsFromParsed(latestParsed);
+
+      // If you have a backend endpoint (e.g., an API that writes to Firestore),
+      // you can POST the parsed object there. Example (commented out):
+      /*
+      try {
+        const res = await fetch('https://your-backend.example.com/import', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ doctors })
+        });
+        if (!res.ok) throw new Error('Save failed');
+        alert('Saved to backend successfully');
+      } catch (err) {
+        alert('Save error: ' + err.message);
+      }
+      */
+
+      // For now (no backend), we just show a confirmation and log to console
+      console.log('Parsed doctors to save:', doctors);
+      alert('Parsed data ready. See console. (If you want, connect a backend endpoint to actually save.)');
+    });
+  </script>
+</body>
+</html>
