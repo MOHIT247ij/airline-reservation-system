@@ -23,7 +23,7 @@ cd airline-reservation-system
 npm install
 npm run dev
 ```
-Open: http://localhost:5173
-
+## 🌐 Live Demo
+👉 [Click here to view live app](https://airline-reservation-system-beta-six.vercel.app)
 ## 👨‍💻 Developer
 **Mohit** | MCA Student | MIT-WPU Pune
